@@ -103,7 +103,7 @@
         /* LÓGICA DE IMPRESIÓN */
         @media print {
             .no-print { display: none !important; }
-            .no-screen { display: block !important; } /* Visible solo en PDF */
+            .no-screen { display: block !important; } 
             html, body { background: none; padding: 0; margin: 0; height: auto; min-height: auto; overflow: visible; }
             .document { box-shadow: none; margin: 0; width: 100%; padding: 0; border: none; min-height: auto; }
             .print-header { position: fixed; top: 0; left: 0; right: 0; }
@@ -114,7 +114,7 @@
         }
         @media screen { 
             #plot-img-print { display: none !important; } 
-            .no-screen { display: none !important; } /* Oculto en pantalla interactiva */
+            .no-screen { display: none !important; } 
         }
     </style>
 </head>
@@ -397,60 +397,89 @@
 
 <script>
     /* ========================================================
-       SISTEMA DE PAGINACIÓN DINÁMICA DE ALTA PRECISIÓN E INYECCIÓN ABSOLUTA
+       SISTEMA MAESTRO DE PAGINACIÓN DINÁMICA ABSOLUTA Y EXPORTACIÓN
        ======================================================== */
-    function updateTOCPagination() {
-        const PAGE_PRINT_HEIGHT = 960; 
-        
-        // 1. Actualizar Índice Dinámico
-        for(let i=1; i<=13; i++) {
-            const section = document.getElementById('sec-' + i);
-            const tocElement = document.getElementById('toc-' + i);
-            if (section && tocElement) {
-                const rect = section.getBoundingClientRect();
-                const offset = rect.top + window.scrollY;
-                const pageNum = Math.floor(offset / PAGE_PRINT_HEIGHT) + 1;
-                tocElement.innerText = pageNum;
-            }
-        }
-
-        // 2. Inyectar números de página absolutos (Estampado físico en hoja con total de páginas)
-        document.querySelectorAll('.injected-page').forEach(e => e.remove()); 
-        const totalHeight = document.querySelector('.document').getBoundingClientRect().height;
-        const totalPages = Math.ceil(totalHeight / PAGE_PRINT_HEIGHT);
-        
-        for(let p=1; p<=totalPages; p++) {
-            const pageDiv = document.createElement('div');
-            pageDiv.className = 'injected-page no-screen'; 
-            pageDiv.style.position = 'absolute';
-            // Restamos 40px para que quede justo encima del footer
-            pageDiv.style.top = (p * PAGE_PRINT_HEIGHT - 40) + 'px'; 
-            pageDiv.style.right = '15mm';
-            pageDiv.style.fontSize = '9pt';
-            pageDiv.style.fontWeight = 'bold';
-            pageDiv.style.color = '#000000';
-            pageDiv.innerText = 'Página ' + p + ' de ' + totalPages;
-            document.querySelector('.document').appendChild(pageDiv);
-        }
-    }
-
     function prepararPDF() {
         const btn = document.getElementById('btn-export');
         const oldText = btn.innerText;
-        btn.innerText = "CALCULANDO PÁGINAS...";
+        btn.innerText = "PROCESANDO PAGINACIÓN...";
         
-        updateTOCPagination();
-
+        // 1. Ocultar el título de la pestaña para que no salga la ruta del archivo impreso en navegadores
         const originalTitle = document.title;
         document.title = " "; 
 
+        // 2. Convertimos el gráfico interactivo 3D a imagen plana para evitar cortes en el PDF
         Plotly.toImage('sensor-plot', {format: 'png', width: 800, height: 500}).then(function(dataUrl) {
             document.getElementById('plot-img-print').src = dataUrl;
-            setTimeout(() => { 
-                btn.innerText = oldText; 
-                window.print(); 
-                document.title = originalTitle; 
-            }, 500);
+            
+            // 3. LA MAGIA DE LA SIMULACIÓN:
+            // Creamos una etiqueta <style> que fuerza temporalmente a la pantalla a 
+            // adoptar exactamente las mismas reglas, alturas y márgenes que tendrá al imprimir.
+            const style = document.createElement('style');
+            style.innerHTML = `@media screen {
+                .no-print { display: none !important; }
+                .no-screen { display: block !important; }
+                body { background: none; padding: 0; margin: 0; }
+                .document { box-shadow: none; border: none; margin: 0; padding: 0; width: 100%; }
+                #sensor-plot { display: none !important; }
+                #plot-img-print { display: block !important; }
+            }`;
+            document.head.appendChild(style);
+
+            // 4. Damos 300ms para que el navegador repinte el DOM con los estilos forzados
+            setTimeout(() => {
+                // Cálculo de altura física de una hoja Carta = 1056px.
+                // Restando márgenes de 15mm arriba y abajo (~114px totales), nos quedan 942px de área imprimible real.
+                const PAGE_PRINT_HEIGHT = 942; 
+                
+                // ACTUALIZAR ÍNDICE (TOC)
+                for(let i=1; i<=13; i++) {
+                    const section = document.getElementById('sec-' + i);
+                    const tocElement = document.getElementById('toc-' + i);
+                    if (section && tocElement) {
+                        const rect = section.getBoundingClientRect();
+                        const offset = rect.top + window.scrollY;
+                        const pageNum = Math.floor(offset / PAGE_PRINT_HEIGHT) + 1;
+                        tocElement.innerText = pageNum;
+                    }
+                }
+
+                // INYECCIÓN DE TEXTO "PÁGINA X DE Y" EN CADA HOJA FÍSICA
+                document.querySelectorAll('.injected-page').forEach(e => e.remove()); 
+                const doc = document.querySelector('.document');
+                const totalHeight = doc.scrollHeight; 
+                const totalPages = Math.ceil(totalHeight / PAGE_PRINT_HEIGHT);
+                
+                for(let p=1; p<=totalPages; p++) {
+                    const pageDiv = document.createElement('div');
+                    pageDiv.className = 'injected-page no-screen'; 
+                    pageDiv.style.position = 'absolute';
+                    // Multiplicar por 942 nos lleva al límite inferior exacto de la hoja.
+                    // Restamos 45px para posicionarlo encima del margen inferior.
+                    pageDiv.style.top = (p * PAGE_PRINT_HEIGHT - 45) + 'px'; 
+                    pageDiv.style.right = '0';
+                    pageDiv.style.fontSize = '10pt';
+                    pageDiv.style.fontWeight = 'bold';
+                    pageDiv.style.color = 'var(--seva-blue)';
+                    pageDiv.style.backgroundColor = '#ffffff'; // Tapar cualquier línea posterior
+                    pageDiv.style.padding = '2px 8px';
+                    pageDiv.style.zIndex = '9999';
+                    pageDiv.innerText = 'Página ' + p + ' de ' + totalPages;
+                    
+                    doc.appendChild(pageDiv);
+                }
+
+                // 5. Retiramos la simulación visual
+                document.head.removeChild(style);
+
+                // 6. Lanzamos ventana de impresión y restauramos el sistema
+                setTimeout(() => { 
+                    window.print(); 
+                    document.title = originalTitle; 
+                    btn.innerText = oldText;
+                }, 100);
+
+            }, 300); 
         });
     }
 
