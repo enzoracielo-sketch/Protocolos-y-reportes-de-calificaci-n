@@ -397,87 +397,151 @@
 
 <script>
     /* ========================================================
-       SISTEMA MAESTRO DE PAGINACIÓN DINÁMICA ABSOLUTA Y EXPORTACIÓN
+       SISTEMA MAESTRO DE SIMULACIÓN Y PAGINACIÓN ABSOLUTA
        ======================================================== */
     function prepararPDF() {
         const btn = document.getElementById('btn-export');
         const oldText = btn.innerText;
-        btn.innerText = "PROCESANDO PAGINACIÓN...";
+        btn.innerText = "Sincronizando Paginación...";
         
-        // 1. Ocultar el título de la pestaña para que no salga la ruta del archivo impreso en navegadores
+        // 1. Ocultar URL nativa del navegador vaciando el title temporalmente
         const originalTitle = document.title;
         document.title = " "; 
 
-        // 2. Convertimos el gráfico interactivo 3D a imagen plana para evitar cortes en el PDF
+        // 2. Renderizar 3D a estático para evitar fallos de impresión
         Plotly.toImage('sensor-plot', {format: 'png', width: 800, height: 500}).then(function(dataUrl) {
             document.getElementById('plot-img-print').src = dataUrl;
             
-            // 3. LA MAGIA DE LA SIMULACIÓN:
-            // Creamos una etiqueta <style> que fuerza temporalmente a la pantalla a 
-            // adoptar exactamente las mismas reglas, alturas y márgenes que tendrá al imprimir.
+            // 3. Forzar DOM a comportarse visualmente igual que en la impresión
             const style = document.createElement('style');
+            style.id = 'print-sim-style';
             style.innerHTML = `@media screen {
+                body { padding: 0 !important; margin: 0 !important; background: none !important; }
+                .document { width: 100% !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important; }
                 .no-print { display: none !important; }
                 .no-screen { display: block !important; }
-                body { background: none; padding: 0; margin: 0; }
-                .document { box-shadow: none; border: none; margin: 0; padding: 0; width: 100%; }
                 #sensor-plot { display: none !important; }
-                #plot-img-print { display: block !important; }
+                #plot-img-print { display: block !important; width: 100%; max-width: 800px; margin: 0 auto; }
             }`;
             document.head.appendChild(style);
 
-            // 4. Damos 300ms para que el navegador repinte el DOM con los estilos forzados
+            // Dar tiempo al navegador de asimilar los estilos
             setTimeout(() => {
-                // Cálculo de altura física de una hoja Carta = 1056px.
-                // Restando márgenes de 15mm arriba y abajo (~114px totales), nos quedan 942px de área imprimible real.
-                const PAGE_PRINT_HEIGHT = 942; 
                 
-                // ACTUALIZAR ÍNDICE (TOC)
-                for(let i=1; i<=13; i++) {
-                    const section = document.getElementById('sec-' + i);
-                    const tocElement = document.getElementById('toc-' + i);
-                    if (section && tocElement) {
-                        const rect = section.getBoundingClientRect();
-                        const offset = rect.top + window.scrollY;
-                        const pageNum = Math.floor(offset / PAGE_PRINT_HEIGHT) + 1;
-                        tocElement.innerText = pageNum;
+                // --- MOTOR DE PAGINACIÓN ---
+                // Cálculos de hoja Carta estándar con margen de 15mm en Chromium
+                const PAGE_USABLE = 942;
+                const HEADER_SPACE = 100;
+                const FOOTER_SPACE = 50;
+                const PAGE_CONTENT = PAGE_USABLE - HEADER_SPACE - FOOTER_SPACE; // Zona utilizable
+
+                let pageNum = 1;
+                let currentY = 0;
+
+                // Limpieza por si hay clics múltiples
+                document.querySelectorAll('.injected-spacer, .injected-page').forEach(e => e.remove());
+
+                // Mapear elementos incluyendo los que están dentro del contenedor de gráficas múltiples
+                let rawElements = Array.from(document.querySelector('.content-wrapper tbody td').children);
+                let elementsToProcess = [];
+                rawElements.forEach(el => {
+                    if (el.id === 'all-charts-container') {
+                        elementsToProcess.push(...Array.from(el.children));
+                    } else {
+                        elementsToProcess.push(el);
                     }
-                }
-
-                // INYECCIÓN DE TEXTO "PÁGINA X DE Y" EN CADA HOJA FÍSICA
-                document.querySelectorAll('.injected-page').forEach(e => e.remove()); 
-                const doc = document.querySelector('.document');
-                const totalHeight = doc.scrollHeight; 
-                const totalPages = Math.ceil(totalHeight / PAGE_PRINT_HEIGHT);
+                });
                 
-                for(let p=1; p<=totalPages; p++) {
-                    const pageDiv = document.createElement('div');
-                    pageDiv.className = 'injected-page no-screen'; 
-                    pageDiv.style.position = 'absolute';
-                    // Multiplicar por 942 nos lleva al límite inferior exacto de la hoja.
-                    // Restamos 45px para posicionarlo encima del margen inferior.
-                    pageDiv.style.top = (p * PAGE_PRINT_HEIGHT - 45) + 'px'; 
-                    pageDiv.style.right = '0';
-                    pageDiv.style.fontSize = '10pt';
-                    pageDiv.style.fontWeight = 'bold';
-                    pageDiv.style.color = 'var(--seva-blue)';
-                    pageDiv.style.backgroundColor = '#ffffff'; // Tapar cualquier línea posterior
-                    pageDiv.style.padding = '2px 8px';
-                    pageDiv.style.zIndex = '9999';
-                    pageDiv.innerText = 'Página ' + p + ' de ' + totalPages;
+                elementsToProcess.forEach(el => {
+                    if (el.classList.contains('no-print') || window.getComputedStyle(el).display === 'none') return;
                     
-                    doc.appendChild(pageDiv);
+                    const elStyle = window.getComputedStyle(el);
+                    let elHeight = el.offsetHeight + parseFloat(elStyle.marginTop || 0) + parseFloat(elStyle.marginBottom || 0);
+
+                    const isCover = el.classList.contains('cover-page');
+                    if (isCover && currentY > 0) { pageNum++; currentY = 0; }
+                    
+                    if ((elStyle.breakBefore === 'always' || elStyle.pageBreakBefore === 'always') && currentY > 0) { 
+                        pageNum++; currentY = 0; 
+                    }
+
+                    // Elementos que no deben romperse a la mitad
+                    const avoidBreak = elStyle.pageBreakInside === 'avoid' || elStyle.breakInside === 'avoid' || 
+                                       ['H1','H2','H3','H4','TABLE'].includes(el.tagName) || 
+                                       el.classList.contains('box') || el.classList.contains('control-panel') || 
+                                       el.classList.contains('plot-container');
+
+                    if (avoidBreak && elHeight <= PAGE_CONTENT) {
+                        if (currentY + elHeight > PAGE_CONTENT) {
+                            // INYECCIÓN MÁGICA: Forzar el salto de página exacto llenando el hueco restante
+                            const spacer = document.createElement('div');
+                            spacer.className = 'injected-spacer no-screen';
+                            spacer.style.height = Math.max(0, PAGE_CONTENT - currentY) + 'px';
+                            spacer.style.display = 'block';
+                            spacer.style.width = '100%';
+                            el.parentNode.insertBefore(spacer, el);
+                            
+                            pageNum++;
+                            currentY = elHeight;
+                        } else {
+                            currentY += elHeight;
+                        }
+                    } else {
+                        // Elementos que fluyen normal (pueden cortarse a la mitad)
+                        if (currentY + elHeight > PAGE_CONTENT) {
+                            const overflow = elHeight - (PAGE_CONTENT - currentY);
+                            pageNum += Math.ceil(overflow / PAGE_CONTENT);
+                            currentY = overflow % PAGE_CONTENT;
+                        } else {
+                            currentY += elHeight;
+                        }
+                    }
+
+                    // Actualizar números de página en el Índice
+                    for(let i=1; i<=13; i++) {
+                        if (el.id === 'sec-' + i || el.querySelector(`#sec-${i}`)) {
+                            const toc = document.getElementById('toc-' + i);
+                            if (toc) toc.innerText = pageNum;
+                        }
+                    }
+
+                    if (isCover || elStyle.breakAfter === 'always' || elStyle.pageBreakAfter === 'always') {
+                        pageNum++;
+                        currentY = 0;
+                    }
+                });
+
+                const totalPages = currentY > 0 ? pageNum : Math.max(1, pageNum - 1);
+                const doc = document.querySelector('.document');
+
+                // Inyectar con posición absoluta los números de página exactos
+                for(let p=1; p<=totalPages; p++) {
+                    const pDiv = document.createElement('div');
+                    pDiv.className = 'injected-page no-screen';
+                    pDiv.style.position = 'absolute';
+                    // Caerá perfecto en el tfoot gracias a los spacers que cuadran el tamaño
+                    pDiv.style.top = (p * PAGE_USABLE - 35) + 'px'; 
+                    pDiv.style.right = '15mm'; // Respetar margen
+                    pDiv.style.fontSize = '9pt';
+                    pDiv.style.fontWeight = 'bold';
+                    pDiv.style.color = 'var(--seva-blue)';
+                    pDiv.style.background = '#ffffff';
+                    pDiv.style.padding = '2px 8px';
+                    pDiv.style.zIndex = '1000';
+                    pDiv.innerText = `Página ${p} de ${totalPages}`;
+                    doc.appendChild(pDiv);
                 }
 
-                // 5. Retiramos la simulación visual
-                document.head.removeChild(style);
-
-                // 6. Lanzamos ventana de impresión y restauramos el sistema
-                setTimeout(() => { 
-                    window.print(); 
-                    document.title = originalTitle; 
+                // 4. Imprimir y restaurar (Limpieza)
+                setTimeout(() => {
+                    window.print();
+                    
+                    document.title = originalTitle;
                     btn.innerText = oldText;
-                }, 100);
+                    
+                    document.getElementById('print-sim-style').remove();
+                    document.querySelectorAll('.injected-spacer, .injected-page').forEach(e => e.remove());
+                }, 300);
 
             }, 300); 
         });
