@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Protocolo de Calificación - SEVA Metrología</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        /* Configuración estricta de Impresión y Márgenes */
+        @page { size: letter; margin: 15mm; }
+
+        :root {
+            --seva-blue: #002366;
+            --black: #000000;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            color: var(--black);
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .document {
+            background: #ffffff;
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            position: relative;
+            box-sizing: border-box;
+            padding: 0 15mm;
+        }
+
+        /* TIPOGRAFÍA Y FLUJO CONTINUO */
+        h1, h2, h3, h4 { color: var(--seva-blue); break-after: avoid; page-break-after: avoid; }
+        h3 { border-left: 5px solid var(--seva-blue); padding-left: 10px; margin-top: 25px; }
+        p, span, td, th, li, div { color: var(--black) !important; font-size: 10.5pt; }
+        
+        .box, .sig-container, .control-panel, .plot-container, table, tr { 
+            page-break-inside: avoid; break-inside: avoid; 
+        }
+        .box { border: 1px solid var(--black); padding: 12px; margin-bottom: 20px; }
+
+        /* ENCABEZADO Y PIE REPETITIVOS EN CADA PÁGINA */
+        .print-header {
+            position: fixed; top: 0; left: 15mm; right: 15mm; height: 90px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 2px solid var(--black); background: #ffffff; z-index: 1000;
+        }
+        .print-footer {
+            position: fixed; bottom: 0; left: 15mm; right: 15mm; height: 40px;
+            border-top: 1px solid var(--black); background: #ffffff; z-index: 1000;
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 9pt; font-weight: bold;
+        }
+
+        .logo-preview {
+            width: 150px; height: 70px; border: 1px dashed var(--black);
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden; background: #ffffff; cursor: pointer;
+        }
+        .logo-preview img { max-width: 100%; max-height: 100%; }
+
+        .content-wrapper { width: 100%; border-collapse: collapse; }
+        .header-space { height: 100px; } 
+        .footer-space { height: 50px; }  
+
+        /* PORTADA */
+        .cover-page {
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; margin-bottom: 40px; margin-top: 20px;
+        }
+        .cover-title { font-size: 24pt; font-weight: bold; color: var(--seva-blue); text-transform: uppercase; margin-bottom: 10px; }
+        .cover-subtitle { font-size: 16pt; margin-bottom: 40px; }
+        .cover-details { width: 80%; border: 2px solid var(--black); padding: 20px; text-align: left; background: #fafafa; }
+        .cover-details p { font-size: 14pt; margin: 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+
+        /* ÍNDICE PAGINADO */
+        .toc-list { list-style: none; padding: 0; margin: 0; }
+        .toc-list li { display: flex; align-items: flex-end; margin-bottom: 10px; font-weight: bold; }
+        .toc-leader { flex-grow: 1; border-bottom: 2px dotted var(--black); margin: 0 10px; position: relative; top: -4px; }
+        .toc-page { min-width: 20px; text-align: right; color: var(--seva-blue) !important; }
+
+        /* Controles Dinámicos */
+        .sig-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-between; margin: 20px 0; text-align: center; }
+        .sig-item { flex: 1; min-width: 200px; border-top: 1px solid var(--black); padding-top: 5px; font-weight: bold; margin-top: 40px; }
+        .control-panel { background: #eef2f7; padding: 15px; border: 1px solid var(--seva-blue); margin-bottom: 15px; }
+        .inputs-row { display: flex; gap: 10px; margin-top: 10px; align-items: center; flex-wrap: wrap;}
+        input, select { padding: 8px; border: 1px solid var(--black); font-family: Arial; }
+        button { background: var(--seva-blue); color: white; border: none; padding: 8px 15px; font-weight: bold; cursor: pointer; }
+        button.danger { background: #e74c3c; }
+
+        /* Tablas */
+        table.data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table.data-table th, table.data-table td { border: 1px solid var(--black); padding: 8px; text-align: left; vertical-align: middle;}
+        table.data-table th { background: #e0e0e0; font-weight: bold; text-align: center; }
+
+        /* Gráficos */
+        .plot-container { width: 100%; height: 450px; border: 1px solid var(--black); margin-bottom: 10px;}
+        #plot-img-print { display: none; width: 100%; max-width: 800px; margin: 0 auto; border: 1px solid var(--black); }
+
+        /* LÓGICA DE IMPRESIÓN */
+        @media print {
+            .no-print { display: none !important; }
+            .no-screen { display: block !important; } /* Visible solo en PDF */
+            html, body { background: none; padding: 0; margin: 0; height: auto; min-height: auto; overflow: visible; }
+            .document { box-shadow: none; margin: 0; width: 100%; padding: 0; border: none; min-height: auto; }
+            .print-header { position: fixed; top: 0; left: 0; right: 0; }
+            .print-footer { position: fixed; bottom: 0; left: 0; right: 0; }
+            #sensor-plot { display: none !important; }
+            #plot-img-print { display: block !important; }
+            .logo-preview { border: none; }
+        }
+        @media screen { 
+            #plot-img-print { display: none !important; } 
+            .no-screen { display: none !important; } /* Oculto en pantalla interactiva */
+        }
+    </style>
+</head>
+<body>
+
+<div class="no-print" style="position: fixed; top: 10px; left: 10px; z-index: 2000;">
+    <button id="btn-export" onclick="prepararPDF()" style="padding: 12px 25px; background: #27ae60; border-radius: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 14px;">
+        EXPORTAR A PDF
+    </button>
+</div>
+
+<div class="document">
+    
+    <div class="print-header">
+        <div class="logo-preview" onclick="document.getElementById('file-logo').click()">
+            <img id="img-logo" src="" style="display:none;">
+            <span id="txt-logo" style="font-size: 9pt; text-align: center; color: #666;">[Clic para<br>Subir Logo]</span>
+        </div>
+        <input type="file" id="file-logo" class="no-print" style="display:none;" onchange="uploadImage(this, 'img-logo', 'txt-logo')">
+        <div style="text-align: right;">
+            <h2 style="margin: 0; font-size: 14pt; color: var(--seva-blue);" contenteditable="true">PROTOCOLO DE CALIFICACIÓN TÉRMICA</h2>
+            <p style="margin: 0; font-size: 10pt;" contenteditable="true">ID: SEVA-PROT-2026-01 | Rev: 00</p>
+        </div>
+    </div>
+
+    <div class="print-footer" contenteditable="true">
+        <span>SEVA Metrología | Ciudad de México - Nezahualcóyotl | www.sevametrologia.com</span>
+        <span>Cumplimiento ALCOA+</span>
+    </div>
+
+    <table class="content-wrapper">
+        <thead><tr><td><div class="header-space"></div></td></tr></thead>
+        <tbody><tr><td>
+
+            <div class="cover-page">
+                <div class="cover-title" contenteditable="true">PROTOCOLO DE CALIFICACIÓN TÉRMICA</div>
+                <div class="cover-subtitle" contenteditable="true">Calificación de Operación (OQ) y Desempeño (PQ)</div>
+                <div class="cover-details" contenteditable="true">
+                    <p><strong>Equipo a Calificar:</strong> Cámara Climática / Refrigerador</p>
+                    <p><strong>Marca y Modelo:</strong> [Escribir Marca/Modelo]</p>
+                    <p><strong>ID Interno:</strong> [Escribir ID]</p>
+                    <p><strong>Fecha de Ejecución:</strong> DD/MM/AAAA</p>
+                </div>
+            </div>
+
+            <div class="box">
+                <h3 style="margin-top:0; border:none; padding:0;">ÍNDICE GENERAL</h3>
+                <ul class="toc-list">
+                    <li><span>1. Aprobación del Protocolo</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-1">--</span></li>
+                    <li><span>2. Objetivo</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-2">--</span></li>
+                    <li><span>3. Alcance</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-3">--</span></li>
+                    <li><span>4. Responsabilidades</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-4">--</span></li>
+                    <li><span>5. Definiciones</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-5">--</span></li>
+                    <li><span>6. Material y Equipo</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-6">--</span></li>
+                    <li><span>7. Descripción y Mapeo Térmico</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-7">--</span></li>
+                    <li><span>8. Procedimiento y Criterios</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-8">--</span></li>
+                    <li><span>9. Referencias</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-9">--</span></li>
+                    <li><span>10. Análisis de Riesgos (AMEF)</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-10">--</span></li>
+                    <li><span>11. Anexos</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-11">--</span></li>
+                    <li><span>12. Hoja de Aprobación</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-12">--</span></li>
+                    <li><span>13. Control de Cambios</span> <span class="toc-leader"></span> <span class="toc-page" id="toc-13">--</span></li>
+                </ul>
+            </div>
+
+            <h3 id="sec-1">1. APROBACIÓN DEL PROTOCOLO</h3>
+            <div class="control-panel no-print">
+                <strong>Añadir Firmante:</strong> 
+                <input type="text" id="new-sig-role-1" placeholder="Puesto">
+                <button onclick="addSignature('sig-box-1', 'new-sig-role-1')">AÑADIR FIRMA</button>
+            </div>
+            <div id="sig-box-1" class="sig-container">
+                <div class="sig-item"><div style="height:40px"></div><span contenteditable="true">ELABORÓ / METRÓLOGO</span></div>
+                <div class="sig-item"><div style="height:40px"></div><span contenteditable="true">REVISÓ / ASEGURAMIENTO</span></div>
+            </div>
+
+            <h3 id="sec-2">2. OBJETIVO</h3>
+            <div class="box" contenteditable="true">Establecer la metodología documentada para demostrar que el equipo cumple con los requerimientos operativos y de desempeño térmico.</div>
+
+            <h3 id="sec-3">3. ALCANCE</h3>
+            <div class="box" contenteditable="true">Aplica a las pruebas de calificación OQ/PQ del equipo designado.</div>
+
+            <h3 id="sec-4">4. RESPONSABILIDADES</h3>
+            <div class="box" contenteditable="true">
+                <ul>
+                    <li><strong>Metrólogo Especialista:</strong> Ejecutar pruebas y documentar resultados.</li>
+                    <li><strong>Calidad:</strong> Verificar el cumplimiento ALCOA+.</li>
+                </ul>
+            </div>
+
+            <h3 id="sec-5">5. DEFINICIONES</h3>
+            <div class="box" contenteditable="true">
+                <p><strong>Estabilidad Térmica:</strong> Fluctuación de la temperatura en el tiempo.</p>
+                <p><strong>Uniformidad Térmica:</strong> Diferencia máxima de temperatura entre puntos.</p>
+            </div>
+
+            <h3 id="sec-6">6. MATERIAL Y EQUIPO</h3>
+            <div class="control-panel no-print">
+                <div class="inputs-row">
+                    <input type="text" id="mat-name" placeholder="Instrumento" style="flex:1;">
+                    <input type="text" id="mat-mod" placeholder="Marca/Modelo" style="flex:1;">
+                    <input type="text" id="mat-id" placeholder="ID/Serie" style="width:100px;">
+                    <button onclick="addMaterial()">AÑADIR MATERIAL</button>
+                </div>
+            </div>
+            <table class="data-table" id="material-table">
+                <thead><tr><th>Instrumento / Material</th><th>Marca / Modelo</th><th>Identificación (ID)</th></tr></thead>
+                <tbody><tr><td contenteditable="true">Sistema Dataloggers Inalámbricos</td><td contenteditable="true">Mesa Labs</td><td contenteditable="true">S-001 al S-015</td></tr></tbody>
+            </table>
+
+            <h3 id="sec-7">7. DESCRIPCIÓN</h3>
+            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                <div style="flex: 1;">
+                    <table class="data-table" contenteditable="true">
+                        <tr><th>Atributo</th><th>Detalle Técnico</th></tr>
+                        <tr><td>Equipo Calificado</td><td>[Tipo de Equipo]</td></tr>
+                        <tr><td>Marca y Modelo</td><td>[Marca]</td></tr>
+                        <tr><td>ID Interno</td><td>[ID]</td></tr>
+                    </table>
+                </div>
+                <div style="width: 250px; border: 1px solid var(--black); text-align: center;">
+                    <div id="equip-preview" style="height: 120px; background: #ffffff; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="document.getElementById('file-equip').click()">
+                        <img id="img-equip" src="" style="display:none; max-width:100%; max-height:100%;">
+                        <span id="txt-equip" style="font-weight: bold;">[Subir Foto Equipo]</span>
+                    </div>
+                    <input type="file" id="file-equip" class="no-print" style="display:none;" onchange="uploadImage(this, 'img-equip', 'txt-equip')">
+                </div>
+            </div>
+
+            <h4 style="color: var(--black); font-size: 12pt; text-align: center; margin-top: 30px;">DIAGRAMA: DISTRIBUCIÓN DE SENSORES (MAPEO TÉRMICO)</h4>
+            <div class="control-panel no-print">
+                <div class="inputs-row">
+                    <input type="text" id="s-id" placeholder="ID (S1)" style="width:80px;">
+                    <select id="s-pos" style="flex:1;">
+                        <optgroup label="Esquinas DKD-R 5-7">
+                            <option value="1,1,1">Esquina Sup-Frontal-Derecha</option>
+                            <option value="-1,1,1">Esquina Sup-Frontal-Izquierda</option>
+                            <option value="1,-1,1">Esquina Sup-Posterior-Derecha</option>
+                            <option value="-1,-1,1">Esquina Sup-Posterior-Izquierda</option>
+                            <option value="1,1,-1">Esquina Inf-Frontal-Derecha</option>
+                            <option value="-1,1,-1">Esquina Inf-Frontal-Izquierda</option>
+                            <option value="1,-1,-1">Esquina Inf-Posterior-Derecha</option>
+                            <option value="-1,-1,-1">Esquina Inf-Posterior-Izquierda</option>
+                        </optgroup>
+                        <optgroup label="Centros">
+                            <option value="0,0,0">Centro Geométrico</option>
+                        </optgroup>
+                    </select>
+                    <button onclick="addSensor()">AGREGAR SENSOR</button>
+                    <button class="danger" onclick="clearSensors()">LIMPIAR PLANO</button>
+                </div>
+            </div>
+            <div id="sensor-plot" class="plot-container"></div>
+            <img id="plot-img-print" src="" alt="Distribución de Sensores">
+
+            <h3 id="sec-8">8. PROCEDIMIENTO Y CRITERIOS DE ACEPTACIÓN</h3>
+            <div class="control-panel no-print">
+                <div class="inputs-row">
+                    <input type="text" id="new-urs-id" placeholder="ID URS" style="width: 80px;">
+                    <input type="text" id="new-urs-req" placeholder="Requisito Usuario" style="flex: 1;">
+                </div>
+                <div class="inputs-row">
+                    <input type="text" id="new-test-name" placeholder="Nombre Prueba" style="flex: 1;">
+                    <input type="text" id="new-test-criteria" placeholder="Criterio Aceptación" style="flex: 1;">
+                    <button onclick="addProcedureTest()">AÑADIR PRUEBA</button>
+                </div>
+            </div>
+            <table class="data-table" id="procedure-table">
+                <thead><tr>
+                    <th style="width: 10%;">ID URS</th>
+                    <th style="width: 20%;">Requisito de Usuario</th>
+                    <th style="width: 20%;">Prueba / Procedimiento</th>
+                    <th style="width: 25%;">Criterio de Aceptación</th>
+                    <th style="width: 25%;">Evidencia (Resultados)</th>
+                </tr></thead>
+                <tbody>
+                    <tr>
+                        <td contenteditable="true">URS-01</td>
+                        <td contenteditable="true">Mantener temperatura 2-8°C</td>
+                        <td contenteditable="true"><strong>Distribución Térmica</strong><br>Mapeo 24 hrs.</td>
+                        <td contenteditable="true">Sensores dentro de rango operativo.</td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            <div style="min-height: 80px; border: 1px dashed #ccc; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 5px;" onclick="document.getElementById('ev-file-0').click()">
+                                <img id="ev-img-0" style="display:none; max-width: 100%; max-height: 150px;">
+                                <span id="ev-txt-0" class="no-print" style="font-size: 8pt; color: #666;">[Subir Evidencia]</span>
+                            </div>
+                            <input type="file" id="ev-file-0" class="no-print" style="display:none;" onchange="uploadImage(this, 'ev-img-0', 'ev-txt-0')">
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 id="sec-9">9. REFERENCIAS</h3>
+            <div class="box" contenteditable="true">
+                <ul>
+                    <li>DKD-R 5-7: Calibración de Cámaras Climáticas.</li>
+                    <li>NOM-059-SSA1-2015 / USP 1079.</li>
+                </ul>
+            </div>
+
+            <h3 id="sec-10">10. ANÁLISIS DE RIESGOS (MATRIZ AMEF)</h3>
+            <div class="control-panel no-print">
+                <div class="inputs-row">
+                    <input type="text" id="r-falla" placeholder="Falla Potencial" style="flex: 1;">
+                    <input type="text" id="r-efecto" placeholder="Efecto / Impacto" style="flex: 1;">
+                    <input type="text" id="r-mitiga" placeholder="Mitigación / Acción" style="flex: 1;">
+                </div>
+                <div class="inputs-row" style="margin-top: 10px;">
+                    <input type="number" id="r-s" placeholder="Sev(1-10)" min="1" max="10" style="width: 90px;">
+                    <input type="number" id="r-o" placeholder="Ocu(1-10)" min="1" max="10" style="width: 90px;">
+                    <input type="number" id="r-d" placeholder="Det(1-10)" min="1" max="10" style="width: 90px;">
+                    <button onclick="addRisk()">AÑADIR RIESGO</button>
+                </div>
+            </div>
+            <table class="data-table" id="risks-table">
+                <thead><tr><th style="width: 25%;">Falla Potencial</th><th style="width: 25%;">Efecto</th><th style="width: 26%;">Mitigación</th><th style="width: 6%;">S</th><th style="width: 6%;">O</th><th style="width: 6%;">D</th><th style="width: 6%;">NPR</th></tr></thead>
+                <tbody>
+                    <tr><td contenteditable="true">Pérdida de energía</td><td contenteditable="true">Datos incompletos</td><td contenteditable="true">Dataloggers con batería</td><td contenteditable="true" style="text-align: center;">8</td><td contenteditable="true" style="text-align: center;">2</td><td contenteditable="true" style="text-align: center;">1</td><td contenteditable="true" style="text-align: center;"><strong>16</strong></td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="sec-11">11. ANEXOS</h3>
+            <h4 style="color: var(--black);">Anexo A: Desviaciones</h4>
+            <div class="box" contenteditable="true"><em>No se presentaron desviaciones.</em></div>
+
+            <h4 style="color: var(--black);">Anexo B: Gráficas de Datos e Incertidumbre (DKD-R 5-7)</h4>
+            <div class="control-panel no-print">
+                <p style="margin-top: 0; font-size: 10pt;"><strong>1. Parámetros de Control (Gráfica):</strong></p>
+                <div class="inputs-row" style="margin-bottom: 10px;">
+                    <input type="text" id="chart-title" placeholder="Título (Ej: Mapeo con Carga)" style="width: 200px; font-weight:bold;">
+                    <input type="number" step="0.1" id="csv-sp" placeholder="Set Point (°C)" style="width: 120px; border-left: 4px solid #27ae60;">
+                    <input type="number" step="0.1" id="csv-ls" placeholder="Límite Sup (°C)" style="width: 120px; border-left: 4px solid #c0392b;">
+                    <input type="number" step="0.1" id="csv-li" placeholder="Límite Inf (°C)" style="width: 120px; border-left: 4px solid #2980b9;">
+                </div>
+                
+                <p style="margin-top: 15px; font-size: 10pt;"><strong>2. Fuentes de Incertidumbre de Medición:</strong></p>
+                <div class="inputs-row" style="margin-bottom: 15px;">
+                    <input type="number" step="0.01" id="u-cal" placeholder="U Calibración (k=2)" title="Incertidumbre Expandida del Certificado" style="width: 150px;">
+                    <input type="number" step="0.01" id="u-der" placeholder="Deriva (°C)" title="Deriva histórica del sensor" style="width: 120px;">
+                    <input type="number" step="0.001" id="u-res" placeholder="Resolución (°C)" title="Resolución del instrumento" style="width: 120px;">
+                </div>
+
+                <div class="inputs-row">
+                    <input type="file" id="csv-file" accept=".csv" onchange="handleCSVUpload(event)" style="width: 100%; max-width: 400px;">
+                    <button onclick="replotGraphIfLoaded()">AGREGAR NUEVA GRÁFICA</button>
+                </div>
+            </div>
+            
+            <div id="all-charts-container"></div>
+
+            <h3 id="sec-12">12. HOJA DE APROBACIÓN</h3>
+            <p>El equipo cumple con los criterios y es apto para su uso.</p>
+            <div class="control-panel no-print">
+                <strong>Añadir Firmante:</strong> 
+                <input type="text" id="new-sig-role-12" placeholder="Puesto">
+                <button onclick="addSignature('sig-box-12', 'new-sig-role-12')">AÑADIR FIRMA</button>
+            </div>
+            <div id="sig-box-12" class="sig-container" style="margin-top: 40px;">
+                <div class="sig-item"><div style="height:40px"></div><span contenteditable="true">RESPONSABLE TÉCNICO</span></div>
+                <div class="sig-item"><div style="height:40px"></div><span contenteditable="true">CLIENTE</span></div>
+            </div>
+
+            <h3 id="sec-13">13. CONTROL DE CAMBIOS</h3>
+            <div class="control-panel no-print">
+                <div class="inputs-row">
+                    <input type="text" id="ch-ver" placeholder="Rev (Ej: 01)" style="width: 60px;">
+                    <input type="date" id="ch-date">
+                    <input type="text" id="ch-desc" placeholder="Descripción del cambio" style="flex:1;">
+                    <button onclick="addChange()">AÑADIR CAMBIO</button>
+                </div>
+            </div>
+            <table class="data-table" id="changes-table">
+                <thead><tr><th style="width: 15%;">Versión</th><th style="width: 15%;">Fecha</th><th style="width: 70%;">Descripción del Cambio</th></tr></thead>
+                <tbody><tr><td contenteditable="true" style="text-align: center;">00</td><td contenteditable="true" style="text-align: center;">DD/MM/AAAA</td><td contenteditable="true">Emisión Inicial.</td></tr></tbody>
+            </table>
+
+        </td></tr></tbody>
+        <tfoot><tr><td><div class="footer-space"></div></td></tr></tfoot>
+    </table>
+</div>
+
+<script>
+    /* ========================================================
+       SISTEMA DE PAGINACIÓN DINÁMICA DE ALTA PRECISIÓN E INYECCIÓN ABSOLUTA
+       ======================================================== */
+    function updateTOCPagination() {
+        const PAGE_PRINT_HEIGHT = 960; 
+        
+        // 1. Actualizar Índice Dinámico
+        for(let i=1; i<=13; i++) {
+            const section = document.getElementById('sec-' + i);
+            const tocElement = document.getElementById('toc-' + i);
+            if (section && tocElement) {
+                const rect = section.getBoundingClientRect();
+                const offset = rect.top + window.scrollY;
+                const pageNum = Math.floor(offset / PAGE_PRINT_HEIGHT) + 1;
+                tocElement.innerText = pageNum;
+            }
+        }
+
+        // 2. Inyectar números de página absolutos (Estampado físico en hoja con total de páginas)
+        document.querySelectorAll('.injected-page').forEach(e => e.remove()); 
+        const totalHeight = document.querySelector('.document').getBoundingClientRect().height;
+        const totalPages = Math.ceil(totalHeight / PAGE_PRINT_HEIGHT);
+        
+        for(let p=1; p<=totalPages; p++) {
+            const pageDiv = document.createElement('div');
+            pageDiv.className = 'injected-page no-screen'; 
+            pageDiv.style.position = 'absolute';
+            // Restamos 40px para que quede justo encima del footer
+            pageDiv.style.top = (p * PAGE_PRINT_HEIGHT - 40) + 'px'; 
+            pageDiv.style.right = '15mm';
+            pageDiv.style.fontSize = '9pt';
+            pageDiv.style.fontWeight = 'bold';
+            pageDiv.style.color = '#000000';
+            pageDiv.innerText = 'Página ' + p + ' de ' + totalPages;
+            document.querySelector('.document').appendChild(pageDiv);
+        }
+    }
+
+    function prepararPDF() {
+        const btn = document.getElementById('btn-export');
+        const oldText = btn.innerText;
+        btn.innerText = "CALCULANDO PÁGINAS...";
+        
+        updateTOCPagination();
+
+        const originalTitle = document.title;
+        document.title = " "; 
+
+        Plotly.toImage('sensor-plot', {format: 'png', width: 800, height: 500}).then(function(dataUrl) {
+            document.getElementById('plot-img-print').src = dataUrl;
+            setTimeout(() => { 
+                btn.innerText = oldText; 
+                window.print(); 
+                document.title = originalTitle; 
+            }, 500);
+        });
+    }
+
+    /* ========================================================
+       MÓDULO DINÁMICO DE MÚLTIPLES GRÁFICAS E INCERTIDUMBRE
+       ======================================================== */
+    let currentCSVData = null;
+    let chartCounter = 0;
+
+    function handleCSVUpload(e) {
+        const file = e.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            currentCSVData = evt.target.result;
+        };
+        reader.readAsText(file);
+    }
+
+    function replotGraphIfLoaded() {
+        if(currentCSVData) {
+            processAndPlotCSV();
+            currentCSVData = null; 
+            document.getElementById('csv-file').value = ''; 
+        } else {
+            alert("Por favor carga un archivo CSV primero.");
+        }
+    }
+
+    function calculateMean(arr) {
+        if(arr.length === 0) return 0;
+        return arr.reduce((a, b) => a + b, 0) / arr.length;
+    }
+    
+    function calculateStdDev(arr, mean) {
+        if(arr.length <= 1) return 0;
+        const sqDiffs = arr.map(v => Math.pow(v - mean, 2));
+        return Math.sqrt(sqDiffs.reduce((a, b) => a + b, 0) / (arr.length - 1));
+    }
+
+    function calculateMKT(arr) {
+        if(arr.length === 0) return 0;
+        const deltaH_R = 10000; 
+        let sumExp = 0;
+        for(let i=0; i<arr.length; i++) {
+            const tempK = arr[i] + 273.15; 
+            sumExp += Math.exp(-deltaH_R / tempK);
+        }
+        const meanExp = sumExp / arr.length;
+        const mktK = deltaH_R / (-Math.log(meanExp));
+        return mktK - 273.15; 
+    }
+
+    function processAndPlotCSV() {
+        const rows = currentCSVData.trim().split('\n').map(r => r.split(','));
+        if (rows.length < 2) return;
+        
+        chartCounter++;
+        const plotId = 'data-plot-' + chartCounter;
+        const tableId = 'stats-table-' + chartCounter;
+        const chartTitle = document.getElementById('chart-title').value || ('Estabilidad Térmica ' + chartCounter);
+
+        const wrapper = document.createElement('div');
+        wrapper.style.pageBreakInside = 'avoid';
+        wrapper.style.marginBottom = '40px';
+        wrapper.innerHTML = `
+            <div id="${plotId}" class="plot-container" style="border: 1px solid var(--black); margin-bottom: 10px;"></div>
+            <table class="data-table" id="${tableId}" style="font-size: 9pt; text-align: center;">
+                <thead>
+                    <tr><th style="text-align: center;">ID Sensor</th><th style="text-align: center;">Media (°C)</th><th style="text-align: center;">Desviación Estándar</th><th style="text-align: center;">MKT (°C)</th><th style="text-align: center; color: var(--seva-blue);">Incertidumbre U (k=2)</th></tr>
+                </thead>
+                <tbody></tbody>
+                <tfoot>
+                    <tr style="background: #eef2f7;"><th style="text-align: center;">GLOBAL (Cámara)</th><th class="stat-g-mean" style="text-align: center;">-</th><th class="stat-g-std" style="text-align: center;">-</th><th class="stat-g-mkt" style="text-align: center;">-</th><th class="stat-g-u" style="text-align: center; color: var(--seva-blue); font-weight: bold;">-</th></tr>
+                </tfoot>
+            </table>
+        `;
+        document.getElementById('all-charts-container').appendChild(wrapper);
+
+        const headers = rows[0].map(h => h.trim());
+        const traces = [];
+        const statsBody = document.querySelector(`#${tableId} tbody`);
+        
+        let globalValues = [];
+        let meansArray = [];
+        let stdDevsArray = [];
+
+        const sp = document.getElementById('csv-sp').value;
+        const ls = document.getElementById('csv-ls').value;
+        const li = document.getElementById('csv-li').value;
+
+        const u_cal_exp = parseFloat(document.getElementById('u-cal').value) || 0;
+        const u_deriva = parseFloat(document.getElementById('u-der').value) || 0;
+        const u_res = parseFloat(document.getElementById('u-res').value) || 0;
+
+        const u_cal = u_cal_exp / 2; 
+        const u_drift = u_deriva / Math.sqrt(3); 
+        const u_resol = u_res / Math.sqrt(12);  
+
+        for (let col = 1; col < headers.length; col++) {
+            const xVals = [], yVals = [];
+            for (let r = 1; r < rows.length; r++) {
+                if(rows[r].length > col) { 
+                    xVals.push(rows[r][0]); 
+                    const v = parseFloat(rows[r][col]); 
+                    if(!isNaN(v)) { yVals.push(v); globalValues.push(v); }
+                }
+            }
+            
+            if(yVals.length === 0) continue;
+
+            const mean = calculateMean(yVals);
+            const stdDev = calculateStdDev(yVals, mean);
+            const mkt = calculateMKT(yVals);
+            
+            meansArray.push(mean);
+            stdDevsArray.push(stdDev);
+
+            const u_stab_ind = stdDev; 
+            const uc_sensor = Math.sqrt(Math.pow(u_cal, 2) + Math.pow(u_drift, 2) + Math.pow(u_resol, 2) + Math.pow(u_stab_ind, 2));
+            const U_sensor_expanded = (2 * uc_sensor).toPrecision(2); 
+
+            statsBody.innerHTML += `<tr><td contenteditable="true">${headers[col]}</td><td contenteditable="true">${mean.toFixed(2)}</td><td contenteditable="true">${stdDev.toFixed(3)}</td><td contenteditable="true">${mkt.toFixed(2)}</td><td contenteditable="true"><strong>± ${U_sensor_expanded}</strong></td></tr>`;
+
+            traces.push({ x: xVals, y: yVals, mode: 'lines', name: headers[col], line: { width: 1.5 } });
+        }
+
+        const gMean = calculateMean(globalValues);
+        const gStd = calculateStdDev(globalValues, gMean);
+        const gMkt = calculateMKT(globalValues);
+        
+        const maxMean = Math.max(...meansArray);
+        const minMean = Math.min(...meansArray);
+        const u_inhom = (maxMean - minMean) / (2 * Math.sqrt(3));
+        const u_stab_global = Math.max(...stdDevsArray);
+
+        const uc_global = Math.sqrt(Math.pow(u_cal, 2) + Math.pow(u_drift, 2) + Math.pow(u_resol, 2) + Math.pow(u_stab_global, 2) + Math.pow(u_inhom, 2));
+        const U_global_expanded = (2 * uc_global).toPrecision(2);
+
+        document.querySelector(`#${tableId} .stat-g-mean`).innerText = gMean.toFixed(2);
+        document.querySelector(`#${tableId} .stat-g-std`).innerText = gStd.toFixed(3);
+        document.querySelector(`#${tableId} .stat-g-mkt`).innerHTML = `<strong>${gMkt.toFixed(2)}</strong>`;
+        document.querySelector(`#${tableId} .stat-g-u`).innerHTML = `± ${U_global_expanded}`;
+
+        const shapes = [];
+        if(sp !== '') shapes.push({type: 'line', yref: 'y', xref: 'paper', x0: 0, x1: 1, y0: sp, y1: sp, line: {color: '#27ae60', width: 2, dash: 'dash'}});
+        if(ls !== '') shapes.push({type: 'line', yref: 'y', xref: 'paper', x0: 0, x1: 1, y0: ls, y1: ls, line: {color: '#c0392b', width: 2}});
+        if(li !== '') shapes.push({type: 'line', yref: 'y', xref: 'paper', x0: 0, x1: 1, y0: li, y1: li, line: {color: '#2980b9', width: 2}});
+
+        const layout = { 
+            title: { text: chartTitle, font: { color: '#000', size: 14 } }, 
+            margin: { l: 40, r: 20, t: 40, b: 90 }, 
+            xaxis: { tickangle: -45, tickfont: { size: 9 }, automargin: true },
+            yaxis: { tickfont: { size: 9 }, automargin: true },
+            showlegend: true, 
+            legend: { orientation: 'h', y: -0.4, font: { size: 9 } },
+            shapes: shapes
+        };
+
+        Plotly.newPlot(plotId, traces, layout, { responsive: true, displayModeBar: false });
+    }
+
+    /* ========================================================
+       LÓGICAS DINÁMICAS PREVIAS
+       ======================================================== */
+    let testCounter = 0;
+    function addProcedureTest() {
+        const ursId = document.getElementById('new-urs-id').value;
+        const ursReq = document.getElementById('new-urs-req').value;
+        const testName = document.getElementById('new-test-name').value;
+        const testCriteria = document.getElementById('new-test-criteria').value;
+        if (!testName) return;
+
+        testCounter++;
+        const imgId = 'ev-img-' + testCounter;
+        const fileId = 'ev-file-' + testCounter;
+        const txtId = 'ev-txt-' + testCounter;
+
+        document.querySelector('#procedure-table tbody').innerHTML += `
+        <tr>
+            <td contenteditable="true">${ursId}</td>
+            <td contenteditable="true">${ursReq}</td>
+            <td contenteditable="true"><strong>${testName}</strong></td>
+            <td contenteditable="true">${testCriteria}</td>
+            <td style="text-align: center; vertical-align: middle;">
+                <div style="min-height: 80px; border: 1px dashed #ccc; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 5px;" onclick="document.getElementById('${fileId}').click()">
+                    <img id="${imgId}" style="display:none; max-width: 100%; max-height: 150px;">
+                    <span id="${txtId}" class="no-print" style="font-size: 8pt; color: #666;">[Subir Evidencia]</span>
+                </div>
+                <input type="file" id="${fileId}" class="no-print" style="display:none;" onchange="uploadImage(this, '${imgId}', '${txtId}')">
+            </td>
+        </tr>`;
+
+        document.getElementById('new-urs-id').value = ''; document.getElementById('new-urs-req').value = '';
+        document.getElementById('new-test-name').value = ''; document.getElementById('new-test-criteria').value = '';
+    }
+
+    function addSignature(containerId, inputId) {
+        const role = document.getElementById(inputId).value;
+        if(!role) return alert("Ingresa un puesto.");
+        const container = document.getElementById(containerId);
+        container.innerHTML += `<div class="sig-item"><div style="height:40px"></div><span contenteditable="true">${role}</span></div>`;
+        document.getElementById(inputId).value = '';
+    }
+
+    function addMaterial() {
+        const mat = document.getElementById('mat-name').value;
+        const mod = document.getElementById('mat-mod').value;
+        const id = document.getElementById('mat-id').value;
+        if(!mat) return;
+        document.querySelector('#material-table tbody').innerHTML += `<tr><td contenteditable="true">${mat}</td><td contenteditable="true">${mod}</td><td contenteditable="true">${id}</td></tr>`;
+        document.getElementById('mat-name').value = ''; document.getElementById('mat-mod').value = ''; document.getElementById('mat-id').value = '';
+    }
+    
+    function addRisk() {
+        const falla = document.getElementById('r-falla').value;
+        const efecto = document.getElementById('r-efecto').value;
+        const mitiga = document.getElementById('r-mitiga').value;
+        const s = parseInt(document.getElementById('r-s').value) || 0;
+        const o = parseInt(document.getElementById('r-o').value) || 0;
+        const d = parseInt(document.getElementById('r-d').value) || 0;
+        if (!falla || !efecto) return alert("Falla Potencial y Efecto son obligatorios.");
+        const npr = s * o * d;
+        document.querySelector('#risks-table tbody').innerHTML += `<tr><td contenteditable="true">${falla}</td><td contenteditable="true">${efecto}</td><td contenteditable="true">${mitiga}</td><td contenteditable="true" style="text-align: center;">${s}</td><td contenteditable="true" style="text-align: center;">${o}</td><td contenteditable="true" style="text-align: center;">${d}</td><td contenteditable="true" style="text-align: center;"><strong>${npr}</strong></td></tr>`;
+        document.getElementById('r-falla').value = ''; document.getElementById('r-efecto').value = ''; document.getElementById('r-mitiga').value = ''; document.getElementById('r-s').value = ''; document.getElementById('r-o').value = ''; document.getElementById('r-d').value = '';
+    }
+
+    function addChange() {
+        const ver = document.getElementById('ch-ver').value;
+        const date = document.getElementById('ch-date').value;
+        const desc = document.getElementById('ch-desc').value;
+        if(!ver) return;
+        document.querySelector('#changes-table tbody').innerHTML += `<tr><td contenteditable="true" style="text-align: center;">${ver}</td><td contenteditable="true" style="text-align: center;">${date}</td><td contenteditable="true">${desc}</td></tr>`;
+        document.getElementById('ch-ver').value = ''; document.getElementById('ch-date').value = ''; document.getElementById('ch-desc').value = '';
+    }
+
+    function uploadImage(input, imgId, txtId) {
+        if (input.files && input.files[0]) {
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById(imgId).src = e.target.result;
+                document.getElementById(imgId).style.display = 'block';
+                if(document.getElementById(txtId)) document.getElementById(txtId).style.display = 'none';
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    let sensors = [];
+    function addSensor() {
+        const idInput = document.getElementById('s-id');
+        const id = idInput.value || ('S' + (sensors.length + 1));
+        const coords = document.getElementById('s-pos').value.split(',').map(Number);
+        sensors.push({ id, x: coords[0], y: coords[1], z: coords[2] });
+        idInput.value = ''; renderAll();
+    }
+    function clearSensors() { sensors = []; renderAll(); }
+    
+    function renderAll() {
+        const cubeTrace = { x: [-1.5, 1.5, 1.5, -1.5, -1.5, -1.5, 1.5, 1.5, -1.5, -1.5, -1.5, -1.5, 1.5, 1.5, 1.5, 1.5], y: [-1.5, -1.5, 1.5, 1.5, -1.5, -1.5, -1.5, 1.5, 1.5, -1.5, 1.5, 1.5, 1.5, 1.5, -1.5, -1.5], z: [-1.5, -1.5, -1.5, -1.5, -1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, -1.5, -1.5, 1.5, 1.5, -1.5], mode: 'lines', type: 'scatter3d', line: { color: '#000000', width: 4 }, hoverinfo: 'none', showlegend: false };
+        const sensorTrace = { x: sensors.map(s => s.x * 1.5), y: sensors.map(s => s.y * 1.5), z: sensors.map(s => s.z * 1.5), mode: 'markers+text', type: 'scatter3d', text: sensors.map(s => s.id), textposition: 'top center', marker: { size: 9, color: '#002366' }, textfont: { color: '#000000', size: 14, weight: 'bold' }, showlegend: false };
+        Plotly.newPlot('sensor-plot', [cubeTrace, sensorTrace], { margin: { l: 0, r: 0, b: 0, t: 0 }, scene: { xaxis: { visible: false }, yaxis: { visible: false }, zaxis: { visible: false }, aspectmode: 'cube' } }, { responsive: true, displayModeBar: false });
+    }
+
+    renderAll();
+</script>
+
+</body>
+</html>
