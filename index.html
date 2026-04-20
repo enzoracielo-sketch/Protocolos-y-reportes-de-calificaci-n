@@ -311,6 +311,7 @@
                 <ul>
                     <li>DKD-R 5-7: Calibración de Cámaras Climáticas.</li>
                     <li>NOM-059-SSA1-2015 / USP 1079.</li>
+                    <li>ILAC-G8: Evaluación de la Conformidad y Reglas de Decisión.</li>
                 </ul>
             </div>
 
@@ -339,7 +340,7 @@
             <h4 style="color: var(--black);">Anexo A: Desviaciones</h4>
             <div class="box" contenteditable="true"><em>No se presentaron desviaciones.</em></div>
 
-            <h4 style="color: var(--black);">Anexo B: Gráficas de Datos e Incertidumbre (DKD-R 5-7)</h4>
+            <h4 style="color: var(--black);">Anexo B: Gráficas, Incertidumbre (DKD-R 5-7) y Conformidad (ILAC-G8)</h4>
             <div class="control-panel no-print">
                 <p style="margin-top: 0; font-size: 10pt;"><strong>1. Parámetros de Control (Gráfica):</strong></p>
                 <div class="inputs-row" style="margin-bottom: 10px;">
@@ -349,23 +350,27 @@
                     <input type="number" step="0.1" id="csv-li" placeholder="Límite Inf (°C)" style="width: 120px; border-left: 4px solid #2980b9;">
                 </div>
                 
-                <p style="margin-top: 15px; font-size: 10pt;"><strong>2. Fuentes de Incertidumbre de Medición:</strong></p>
+                <p style="margin-top: 15px; font-size: 10pt;"><strong>2. Incertidumbre y Regla de Decisión (ILAC-G8):</strong></p>
                 <div class="inputs-row" style="margin-bottom: 15px;">
-                    <input type="number" step="0.01" id="u-cal" placeholder="U Calibración (k=2)" title="Incertidumbre Expandida del Certificado" style="width: 150px;">
-                    <input type="number" step="0.01" id="u-der" placeholder="Deriva (°C)" title="Deriva histórica del sensor" style="width: 120px;">
-                    <input type="number" step="0.001" id="u-res" placeholder="Resolución (°C)" title="Resolución del instrumento" style="width: 120px;">
+                    <input type="number" step="0.01" id="u-cal" placeholder="U Calibración (k=2)" title="Incertidumbre Expandida del Certificado" style="width: 140px;">
+                    <input type="number" step="0.01" id="u-der" placeholder="Deriva (°C)" title="Deriva histórica del sensor" style="width: 100px;">
+                    <input type="number" step="0.001" id="u-res" placeholder="Resolución (°C)" title="Resolución del instrumento" style="width: 100px;">
+                    <select id="ilac-rule" style="width: 280px; font-weight:bold; border-left: 4px solid var(--seva-blue);">
+                        <option value="simple">Regla: Aceptación Simple (w=0)</option>
+                        <option value="guardia">Regla: Banda de Guardia (w=U)</option>
+                    </select>
                 </div>
 
                 <div class="inputs-row">
                     <input type="file" id="csv-file" accept=".csv" onchange="handleCSVUpload(event)" style="width: 100%; max-width: 400px;">
-                    <button onclick="replotGraphIfLoaded()">AGREGAR NUEVA GRÁFICA</button>
+                    <button onclick="replotGraphIfLoaded()">AGREGAR NUEVA GRÁFICA Y DICTAMEN</button>
                 </div>
             </div>
             
             <div id="all-charts-container"></div>
 
             <h3 id="sec-12">12. HOJA DE APROBACIÓN</h3>
-            <p>El equipo cumple con los criterios y es apto para su uso.</p>
+            <p>El equipo cumple con los criterios de aceptación y se dictamina como apto para su uso rutinario bajo los parámetros validados.</p>
             <div class="control-panel no-print">
                 <strong>Añadir Firmante:</strong> 
                 <input type="text" id="new-sig-role-12" placeholder="Puesto">
@@ -397,27 +402,25 @@
 
 <script>
     /* ========================================================
-       SISTEMA MAESTRO DE SIMULACIÓN Y PAGINACIÓN ABSOLUTA
+       SISTEMA MAESTRO DE SIMULACIÓN Y PAGINACIÓN ABSOLUTA MATEMÁTICA
        ======================================================== */
     function prepararPDF() {
         const btn = document.getElementById('btn-export');
         const oldText = btn.innerText;
         btn.innerText = "Sincronizando Paginación...";
         
-        // 1. Ocultar URL nativa del navegador vaciando el title temporalmente
         const originalTitle = document.title;
         document.title = " "; 
 
-        // 2. Renderizar 3D a estático para evitar fallos de impresión
         Plotly.toImage('sensor-plot', {format: 'png', width: 800, height: 500}).then(function(dataUrl) {
             document.getElementById('plot-img-print').src = dataUrl;
             
-            // 3. Forzar DOM a comportarse visualmente igual que en la impresión
+            // Forzamos al DOM a adoptar la medida física real de hoja (210mm de ancho)
             const style = document.createElement('style');
             style.id = 'print-sim-style';
             style.innerHTML = `@media screen {
-                body { padding: 0 !important; margin: 0 !important; background: none !important; }
-                .document { width: 100% !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important; }
+                body { padding: 0 !important; margin: 0 !important; background: none !important; width: 210mm !important;}
+                .document { width: 210mm !important; margin: 0 !important; padding: 0 15mm !important; box-shadow: none !important; border: none !important; box-sizing: border-box !important;}
                 .no-print { display: none !important; }
                 .no-screen { display: block !important; }
                 #sensor-plot { display: none !important; }
@@ -425,23 +428,20 @@
             }`;
             document.head.appendChild(style);
 
-            // Dar tiempo al navegador de asimilar los estilos
             setTimeout(() => {
-                
-                // --- MOTOR DE PAGINACIÓN ---
-                // Cálculos de hoja Carta estándar con margen de 15mm en Chromium
-                const PAGE_USABLE = 942;
-                const HEADER_SPACE = 100;
-                const FOOTER_SPACE = 50;
-                const PAGE_CONTENT = PAGE_USABLE - HEADER_SPACE - FOOTER_SPACE; // Zona utilizable
+                // Cálculo Matemático Infalible de Hoja Carta (96dpi)
+                // Altura Total = 1056px (11 pulgadas)
+                // Márgenes = 15mm (arriba y abajo) = ~114px en total.
+                const PAGE_USABLE = 942; // Zona física real por hoja (1056 - 114)
+                const HEADER_SPACE = 100; // Alto thead
+                const FOOTER_SPACE = 50;  // Alto tfoot
+                const PAGE_CONTENT = 792; // 942 - 150 = Espacio estricto para tu contenido por hoja.
 
                 let pageNum = 1;
                 let currentY = 0;
 
-                // Limpieza por si hay clics múltiples
                 document.querySelectorAll('.injected-spacer, .injected-page').forEach(e => e.remove());
 
-                // Mapear elementos incluyendo los que están dentro del contenedor de gráficas múltiples
                 let rawElements = Array.from(document.querySelector('.content-wrapper tbody td').children);
                 let elementsToProcess = [];
                 rawElements.forEach(el => {
@@ -465,7 +465,6 @@
                         pageNum++; currentY = 0; 
                     }
 
-                    // Elementos que no deben romperse a la mitad
                     const avoidBreak = elStyle.pageBreakInside === 'avoid' || elStyle.breakInside === 'avoid' || 
                                        ['H1','H2','H3','H4','TABLE'].includes(el.tagName) || 
                                        el.classList.contains('box') || el.classList.contains('control-panel') || 
@@ -473,10 +472,10 @@
 
                     if (avoidBreak && elHeight <= PAGE_CONTENT) {
                         if (currentY + elHeight > PAGE_CONTENT) {
-                            // INYECCIÓN MÁGICA: Forzar el salto de página exacto llenando el hueco restante
+                            // MAGIA: Rellenar el espacio sobrante con un div transparente obliga al navegador a saltar de hoja.
                             const spacer = document.createElement('div');
-                            spacer.className = 'injected-spacer no-screen';
-                            spacer.style.height = Math.max(0, PAGE_CONTENT - currentY) + 'px';
+                            spacer.className = 'injected-spacer no-screen'; // Visible en la impresión para que mantenga el espacio
+                            spacer.style.height = (PAGE_CONTENT - currentY) + 'px';
                             spacer.style.display = 'block';
                             spacer.style.width = '100%';
                             el.parentNode.insertBefore(spacer, el);
@@ -487,7 +486,6 @@
                             currentY += elHeight;
                         }
                     } else {
-                        // Elementos que fluyen normal (pueden cortarse a la mitad)
                         if (currentY + elHeight > PAGE_CONTENT) {
                             const overflow = elHeight - (PAGE_CONTENT - currentY);
                             pageNum += Math.ceil(overflow / PAGE_CONTENT);
@@ -497,7 +495,7 @@
                         }
                     }
 
-                    // Actualizar números de página en el Índice
+                    // Sincronización Inmediata del Índice con el bloque forzado
                     for(let i=1; i<=13; i++) {
                         if (el.id === 'sec-' + i || el.querySelector(`#sec-${i}`)) {
                             const toc = document.getElementById('toc-' + i);
@@ -505,23 +503,31 @@
                         }
                     }
 
+                    // Saltos posteriores obligados (Ej. Después de la Portada)
                     if (isCover || elStyle.breakAfter === 'always' || elStyle.pageBreakAfter === 'always') {
-                        pageNum++;
-                        currentY = 0;
+                        if(currentY > 0) {
+                            const spacer = document.createElement('div');
+                            spacer.className = 'injected-spacer no-screen';
+                            spacer.style.height = (PAGE_CONTENT - currentY) + 'px';
+                            el.parentNode.insertBefore(spacer, el.nextSibling);
+                            pageNum++;
+                            currentY = 0;
+                        }
                     }
                 });
 
                 const totalPages = currentY > 0 ? pageNum : Math.max(1, pageNum - 1);
                 const doc = document.querySelector('.document');
 
-                // Inyectar con posición absoluta los números de página exactos
+                // Estampado Absoluto exacto (Evitamos bordes desfasados)
                 for(let p=1; p<=totalPages; p++) {
                     const pDiv = document.createElement('div');
                     pDiv.className = 'injected-page no-screen';
                     pDiv.style.position = 'absolute';
-                    // Caerá perfecto en el tfoot gracias a los spacers que cuadran el tamaño
-                    pDiv.style.top = (p * PAGE_USABLE - 35) + 'px'; 
-                    pDiv.style.right = '15mm'; // Respetar margen
+                    // (p * 942) nos pone en el límite inferior de la página física.
+                    // Restamos 38px para que quede exactamente dentro del cuadro de .print-footer (que mide 40px)
+                    pDiv.style.top = (p * PAGE_USABLE - 38) + 'px'; 
+                    pDiv.style.right = '15mm'; 
                     pDiv.style.fontSize = '9pt';
                     pDiv.style.fontWeight = 'bold';
                     pDiv.style.color = 'var(--seva-blue)';
@@ -532,7 +538,6 @@
                     doc.appendChild(pDiv);
                 }
 
-                // 4. Imprimir y restaurar (Limpieza)
                 setTimeout(() => {
                     window.print();
                     
@@ -540,6 +545,7 @@
                     btn.innerText = oldText;
                     
                     document.getElementById('print-sim-style').remove();
+                    // Limpiamos los bloques forzados para regresar a la vista interactiva web
                     document.querySelectorAll('.injected-spacer, .injected-page').forEach(e => e.remove());
                 }, 300);
 
@@ -548,7 +554,7 @@
     }
 
     /* ========================================================
-       MÓDULO DINÁMICO DE MÚLTIPLES GRÁFICAS E INCERTIDUMBRE
+       MÓDULO DINÁMICO DE INCERTIDUMBRE, MKT Y DICTAMEN G8
        ======================================================== */
     let currentCSVData = null;
     let chartCounter = 0;
@@ -604,20 +610,38 @@
         chartCounter++;
         const plotId = 'data-plot-' + chartCounter;
         const tableId = 'stats-table-' + chartCounter;
-        const chartTitle = document.getElementById('chart-title').value || ('Estabilidad Térmica ' + chartCounter);
+        const chartTitle = document.getElementById('chart-title').value || ('Análisis Térmico ' + chartCounter);
 
         const wrapper = document.createElement('div');
         wrapper.style.pageBreakInside = 'avoid';
         wrapper.style.marginBottom = '40px';
+        wrapper.style.position = 'relative'; 
         wrapper.innerHTML = `
-            <div id="${plotId}" class="plot-container" style="border: 1px solid var(--black); margin-bottom: 10px;"></div>
-            <table class="data-table" id="${tableId}" style="font-size: 9pt; text-align: center;">
+            <button class="danger no-print" onclick="this.parentElement.remove()" style="position: absolute; right: 5px; top: 5px; z-index: 100; font-size: 8pt; padding: 5px 10px; cursor: pointer; border-radius: 4px;">✕ ELIMINAR SECCIÓN</button>
+            <div id="${plotId}" class="plot-container" style="border: 1px solid var(--black); margin-bottom: 10px; margin-top: 15px;"></div>
+            <table class="data-table" id="${tableId}" style="font-size: 7.5pt; text-align: center;">
                 <thead>
-                    <tr><th style="text-align: center;">ID Sensor</th><th style="text-align: center;">Media (°C)</th><th style="text-align: center;">Desviación Estándar</th><th style="text-align: center;">MKT (°C)</th><th style="text-align: center; color: var(--seva-blue);">Incertidumbre U (k=2)</th></tr>
+                    <tr>
+                        <th style="text-align: center; width:12%">ID Sensor</th>
+                        <th style="text-align: center; width:12%">Media (°C)</th>
+                        <th style="text-align: center; width:12%">Desv. Est.</th>
+                        <th style="text-align: center; width:12%; color: var(--seva-blue);">MKT (°C)</th>
+                        <th style="text-align: center; width:16%">Desv. al SP (Media)</th>
+                        <th style="text-align: center; width:18%; color: var(--seva-blue);">Incertidumbre U (k=2)</th>
+                        <th style="text-align: center; width:18%">Conformidad (ILAC G8)</th>
+                    </tr>
                 </thead>
                 <tbody></tbody>
                 <tfoot>
-                    <tr style="background: #eef2f7;"><th style="text-align: center;">GLOBAL (Cámara)</th><th class="stat-g-mean" style="text-align: center;">-</th><th class="stat-g-std" style="text-align: center;">-</th><th class="stat-g-mkt" style="text-align: center;">-</th><th class="stat-g-u" style="text-align: center; color: var(--seva-blue); font-weight: bold;">-</th></tr>
+                    <tr style="background: #eef2f7;">
+                        <th style="text-align: center;">GLOBAL</th>
+                        <th class="stat-g-mean" style="text-align: center;">-</th>
+                        <th class="stat-g-std" style="text-align: center;">-</th>
+                        <th class="stat-g-mkt" style="text-align: center; color: var(--seva-blue);"> - </th>
+                        <th class="stat-g-desv" style="text-align: center;">-</th>
+                        <th class="stat-g-u" style="text-align: center; color: var(--seva-blue); font-weight: bold;">-</th>
+                        <th class="stat-g-conf" style="text-align: center;">-</th>
+                    </tr>
                 </tfoot>
             </table>
         `;
@@ -634,6 +658,7 @@
         const sp = document.getElementById('csv-sp').value;
         const ls = document.getElementById('csv-ls').value;
         const li = document.getElementById('csv-li').value;
+        const ilacRule = document.getElementById('ilac-rule').value;
 
         const u_cal_exp = parseFloat(document.getElementById('u-cal').value) || 0;
         const u_deriva = parseFloat(document.getElementById('u-der').value) || 0;
@@ -657,8 +682,19 @@
 
             const mean = calculateMean(yVals);
             const stdDev = calculateStdDev(yVals, mean);
-            const mkt = calculateMKT(yVals);
+            const mkt = calculateMKT(yVals); // Recuperamos MKT de cada sensor
             
+            const maxVal = Math.max(...yVals);
+            const minVal = Math.min(...yVals);
+
+            // Desviación = Media - Set Point
+            let desvSP = '-';
+            if (sp !== '') {
+                const spFloat = parseFloat(sp);
+                const diffMean = mean - spFloat;
+                desvSP = (diffMean > 0 ? '+' : '') + diffMean.toFixed(2);
+            }
+
             meansArray.push(mean);
             stdDevsArray.push(stdDev);
 
@@ -666,15 +702,45 @@
             const uc_sensor = Math.sqrt(Math.pow(u_cal, 2) + Math.pow(u_drift, 2) + Math.pow(u_resol, 2) + Math.pow(u_stab_ind, 2));
             const U_sensor_expanded = (2 * uc_sensor).toPrecision(2); 
 
-            statsBody.innerHTML += `<tr><td contenteditable="true">${headers[col]}</td><td contenteditable="true">${mean.toFixed(2)}</td><td contenteditable="true">${stdDev.toFixed(3)}</td><td contenteditable="true">${mkt.toFixed(2)}</td><td contenteditable="true"><strong>± ${U_sensor_expanded}</strong></td></tr>`;
+            // Evaluación Binaria ILAC-G8
+            let conformity = '<span style="color:#666;">Sin Límites</span>';
+            if (ls !== '' && li !== '') {
+                const w = (ilacRule === 'guardia') ? parseFloat(U_sensor_expanded) : 0;
+                if ((maxVal + w) <= parseFloat(ls) && (minVal - w) >= parseFloat(li)) {
+                    conformity = '<span style="color: #27ae60; font-weight: bold;">CUMPLE</span>';
+                } else {
+                    conformity = '<span style="color: #c0392b; font-weight: bold;">NO CUMPLE</span>';
+                }
+            }
+
+            // MKT se inyecta nuevamente en la columna central correspondiente
+            statsBody.innerHTML += `<tr>
+                <td contenteditable="true"><strong>${headers[col]}</strong></td>
+                <td contenteditable="true">${mean.toFixed(2)}</td>
+                <td contenteditable="true">${stdDev.toFixed(3)}</td>
+                <td contenteditable="true"><strong>${mkt.toFixed(2)}</strong></td>
+                <td contenteditable="true">${desvSP}</td>
+                <td contenteditable="true"><strong>± ${U_sensor_expanded}</strong></td>
+                <td contenteditable="true">${conformity}</td>
+            </tr>`;
 
             traces.push({ x: xVals, y: yVals, mode: 'lines', name: headers[col], line: { width: 1.5 } });
         }
 
+        // --- CÁLCULOS GLOBALES ---
         const gMean = calculateMean(globalValues);
         const gStd = calculateStdDev(globalValues, gMean);
-        const gMkt = calculateMKT(globalValues);
+        const gMkt = calculateMKT(globalValues); // Recuperamos MKT global
+        const gMax = Math.max(...globalValues);
+        const gMin = Math.min(...globalValues);
         
+        let gDesvSP = '-';
+        if (sp !== '') {
+            const spFloat = parseFloat(sp);
+            const gDiffMean = gMean - spFloat;
+            gDesvSP = (gDiffMean > 0 ? '+' : '') + gDiffMean.toFixed(2);
+        }
+
         const maxMean = Math.max(...meansArray);
         const minMean = Math.min(...meansArray);
         const u_inhom = (maxMean - minMean) / (2 * Math.sqrt(3));
@@ -683,11 +749,25 @@
         const uc_global = Math.sqrt(Math.pow(u_cal, 2) + Math.pow(u_drift, 2) + Math.pow(u_resol, 2) + Math.pow(u_stab_global, 2) + Math.pow(u_inhom, 2));
         const U_global_expanded = (2 * uc_global).toPrecision(2);
 
+        let gConformity = '<span style="color:#666;">-</span>';
+        if (ls !== '' && li !== '') {
+            const gW = (ilacRule === 'guardia') ? parseFloat(U_global_expanded) : 0;
+            if ((gMax + gW) <= parseFloat(ls) && (gMin - gW) >= parseFloat(li)) {
+                gConformity = '<span style="color: #27ae60; font-weight: bold;">CUMPLE</span>';
+            } else {
+                gConformity = '<span style="color: #c0392b; font-weight: bold;">NO CUMPLE</span>';
+            }
+        }
+
+        // Asignación de resultados globales
         document.querySelector(`#${tableId} .stat-g-mean`).innerText = gMean.toFixed(2);
         document.querySelector(`#${tableId} .stat-g-std`).innerText = gStd.toFixed(3);
         document.querySelector(`#${tableId} .stat-g-mkt`).innerHTML = `<strong>${gMkt.toFixed(2)}</strong>`;
+        document.querySelector(`#${tableId} .stat-g-desv`).innerText = gDesvSP;
         document.querySelector(`#${tableId} .stat-g-u`).innerHTML = `± ${U_global_expanded}`;
+        document.querySelector(`#${tableId} .stat-g-conf`).innerHTML = gConformity;
 
+        // Gráfica
         const shapes = [];
         if(sp !== '') shapes.push({type: 'line', yref: 'y', xref: 'paper', x0: 0, x1: 1, y0: sp, y1: sp, line: {color: '#27ae60', width: 2, dash: 'dash'}});
         if(ls !== '') shapes.push({type: 'line', yref: 'y', xref: 'paper', x0: 0, x1: 1, y0: ls, y1: ls, line: {color: '#c0392b', width: 2}});
