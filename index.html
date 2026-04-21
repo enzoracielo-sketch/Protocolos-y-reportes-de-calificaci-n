@@ -12,6 +12,8 @@
             --bg-color: #f4f7f6;
             --text-dark: #000000;
             --border-color: #cccccc;
+            --disabled-color: #999999;
+            --disabled-bg: #e0e0e0;
         }
 
         body {
@@ -36,30 +38,55 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
-        .logo-area {
+        .header-titles {
             display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .logo-placeholder {
-            width: 50px;
-            height: 50px;
-            background-color: var(--white);
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--seva-blue);
-            font-weight: bold;
-            font-size: 10px;
-            text-align: center;
+            flex-direction: column;
         }
 
         header h1 {
             margin: 0;
             font-size: 20pt;
             letter-spacing: 1px;
+        }
+
+        .header-subtitle {
+            font-size: 10pt;
+            font-weight: normal;
+            margin-top: 5px;
+            color: #d0d8e8;
+        }
+
+        /* Logo Interactiva en la esquina superior derecha */
+        .logo-area {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px dashed var(--white);
+            border-radius: 8px;
+            padding: 5px;
+            min-width: 120px;
+            height: 65px;
+            transition: background-color 0.3s;
+        }
+
+        .logo-area:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .logo-placeholder {
+            color: var(--white);
+            font-weight: bold;
+            font-size: 9pt;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        #img-logo {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 4px;
         }
 
         /* Barra de Búsqueda */
@@ -112,7 +139,7 @@
             gap: 25px;
         }
 
-        /* Diseño de Tarjeta (Repositorio) */
+        /* Diseño de Tarjeta Activa */
         .card {
             background-color: var(--white);
             border: 1px solid var(--border-color);
@@ -125,10 +152,18 @@
             justify-content: space-between;
         }
 
-        .card:hover {
+        .card:hover:not(.disabled) {
             transform: translateY(-5px);
             box-shadow: 0 8px 15px rgba(0,0,0,0.1);
             border-color: var(--seva-blue);
+        }
+
+        /* Diseño de Tarjeta Próximamente (Inactiva) */
+        .card.disabled {
+            background-color: #fafafa;
+            border-color: #eaeaea;
+            box-shadow: none;
+            cursor: default;
         }
 
         .card-icon {
@@ -136,15 +171,24 @@
             margin-bottom: 15px;
         }
 
+        .card.disabled .card-icon {
+            opacity: 0.5;
+            filter: grayscale(100%);
+        }
+
         .card-title {
             font-size: 12pt;
             font-weight: bold;
             color: var(--seva-blue);
             margin-bottom: 10px;
-            min-height: 45px; /* Alineación uniforme */
+            min-height: 45px;
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+        .card.disabled .card-title {
+            color: var(--disabled-color);
         }
 
         .card-desc {
@@ -154,6 +198,11 @@
             flex-grow: 1;
         }
 
+        .card.disabled .card-desc {
+            color: #aaaaaa;
+        }
+
+        /* Botones */
         .btn-open {
             background-color: var(--seva-blue);
             color: var(--white);
@@ -171,6 +220,13 @@
             background-color: var(--seva-blue-hover);
         }
 
+        .btn-disabled {
+            background-color: var(--disabled-bg);
+            color: var(--disabled-color);
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
         /* Pie de página */
         footer {
             background-color: var(--white);
@@ -186,17 +242,20 @@
 <body>
 
     <header>
-        <div class="logo-area">
-            <div class="logo-placeholder">LOGO<br>SEVA</div>
+        <div class="header-titles">
             <h1>PORTAL DE VALIDACIÓN Y METROLOGÍA</h1>
+            <div class="header-subtitle">Sistema Central de Plantillas y Generación de Protocolos</div>
         </div>
-        <div style="font-size: 10pt; font-weight: normal;">
-            Sistema de Gestión de Plantillas
+        
+        <div class="logo-area" onclick="document.getElementById('file-logo').click()" title="Haz clic para subir tu logo">
+            <img id="img-logo" src="" style="display:none;">
+            <div id="txt-logo" class="logo-placeholder">SUBIR<br>LOGO AQUÍ</div>
         </div>
+        <input type="file" id="file-logo" style="display:none;" accept="image/*" onchange="uploadImage(this, 'img-logo', 'txt-logo')">
     </header>
 
     <div class="search-container">
-        <input type="text" id="search-input" class="search-input" placeholder="🔍 Buscar repositorio o plantilla (Ej. Mapeo, URS, Calibración)..." onkeyup="filterCards()">
+        <input type="text" id="search-input" class="search-input" placeholder="🔍 Buscar repositorio o plantilla (Ej. Mapeo, Calificación, URS)..." onkeyup="filterCards()">
     </div>
 
     <main>
@@ -204,20 +263,6 @@
         
         <div class="grid-container" id="repositories-grid">
             
-            <div class="card" data-title="Plantilla-URS Requerimientos Usuario">
-                <div class="card-icon">📋</div>
-                <div class="card-title">Plantilla-URS</div>
-                <div class="card-desc">Especificación de Requerimientos de Usuario.</div>
-                <button class="btn-open">ABRIR PLANTILLA</button>
-            </div>
-
-            <div class="card" data-title="Plantilla-DQ Calificacion de Diseño">
-                <div class="card-icon">📐</div>
-                <div class="card-title">Plantilla-DQ</div>
-                <div class="card-desc">Protocolo de Calificación de Diseño.</div>
-                <button class="btn-open">ABRIR PLANTILLA</button>
-            </div>
-
             <div class="card" data-title="Plantilla CI Calificacion de Instalacion">
                 <div class="card-icon">🔧</div>
                 <div class="card-title">Plantilla CI</div>
@@ -232,60 +277,74 @@
                 <button class="btn-open">ABRIR PLANTILLA</button>
             </div>
 
-            <div class="card" data-title="Plantilla CF Calificacion Funcionamiento">
+            <div class="card" data-title="Plantilla CF Calificacion Funcionamiento Desempeño">
                 <div class="card-icon">🚀</div>
                 <div class="card-title">Plantilla CF</div>
-                <div class="card-desc">Protocolo de Calificación de Desempeño / Falla.</div>
+                <div class="card-desc">Protocolo de Calificación de Desempeño / Funcionamiento.</div>
                 <button class="btn-open">ABRIR PLANTILLA</button>
             </div>
 
-            <div class="card" data-title="Plantilla-Plan de validacion VMP Maestro">
-                <div class="card-icon">📅</div>
-                <div class="card-title">Plantilla-Plan de Validación</div>
-                <div class="card-desc">Plan Maestro de Validación y directrices.</div>
-                <button class="btn-open">ABRIR PLANTILLA</button>
-            </div>
-
-            <div class="card" data-title="Plantilla-Caracterizacion Equipo Almacen">
+            <div class="card" data-title="Plantilla-Caracterizacion Equipo Almacen Camaras">
                 <div class="card-icon">🔬</div>
                 <div class="card-title">Plantilla-Caracterización</div>
                 <div class="card-desc">Caracterización térmica de equipos y almacenes.</div>
                 <button class="btn-open">ABRIR PLANTILLA</button>
             </div>
 
-            <div class="card" data-title="Plantilla-Calibracion TLD Temperatura">
-                <div class="card-icon">🌡️</div>
-                <div class="card-title">Plantilla-Calibración TLD</div>
-                <div class="card-desc">Certificados y cálculos para Termómetros (TLD).</div>
+            <div class="card" data-title="Plantilla-Mapeo de Temp y Hum Termico Humedad">
+                <div class="card-icon">🗺️</div>
+                <div class="card-title">Plantilla-Mapeo de Temp y Hum</div>
+                <div class="card-desc">Distribución de sensores y análisis de mapeo (DKD-R 5-7).</div>
                 <button class="btn-open">ABRIR PLANTILLA</button>
             </div>
 
-            <div class="card" data-title="Plantilla-Calibracion HUM Humedad">
-                <div class="card-icon">💧</div>
-                <div class="card-title">Plantilla-Calibración HUM</div>
-                <div class="card-desc">Certificados y cálculos para Higrómetros (Humedad).</div>
-                <button class="btn-open">ABRIR PLANTILLA</button>
-            </div>
-
-            <div class="card" data-title="Plantilla MEC Material Equipo">
-                <div class="card-icon">🛠️</div>
-                <div class="card-title">Plantilla MEC</div>
-                <div class="card-desc">Gestión de Material, Equipo y Componentes.</div>
-                <button class="btn-open">ABRIR PLANTILLA</button>
-            </div>
-
-            <div class="card" data-title="Plantilla-Protocolos General">
+            <div class="card" data-title="Plantilla-Protocolos General Generador">
                 <div class="card-icon">📑</div>
                 <div class="card-title">Plantilla-Protocolos</div>
                 <div class="card-desc">Generador general de Protocolos Técnicos.</div>
                 <button class="btn-open">ABRIR PLANTILLA</button>
             </div>
 
-            <div class="card" data-title="Plantilla-Mapeo de Temp y Hum Termico">
-                <div class="card-icon">🗺️</div>
-                <div class="card-title">Plantilla-Mapeo de Temp y Hum</div>
-                <div class="card-desc">Distribución de sensores y análisis de mapeo (DKD-R 5-7).</div>
-                <button class="btn-open">ABRIR PLANTILLA</button>
+            <div class="card disabled" data-title="Plantilla-URS Requerimientos Usuario">
+                <div class="card-icon">📋</div>
+                <div class="card-title">Plantilla-URS</div>
+                <div class="card-desc">Especificación de Requerimientos de Usuario.</div>
+                <button class="btn-open btn-disabled" disabled>PRÓXIMAMENTE</button>
+            </div>
+
+            <div class="card disabled" data-title="Plantilla-DQ Calificacion de Diseño">
+                <div class="card-icon">📐</div>
+                <div class="card-title">Plantilla-DQ</div>
+                <div class="card-desc">Protocolo de Calificación de Diseño.</div>
+                <button class="btn-open btn-disabled" disabled>PRÓXIMAMENTE</button>
+            </div>
+
+            <div class="card disabled" data-title="Plantilla-Plan de validacion VMP Maestro">
+                <div class="card-icon">📅</div>
+                <div class="card-title">Plantilla-Plan de Validación</div>
+                <div class="card-desc">Plan Maestro de Validación y directrices estratégicas.</div>
+                <button class="btn-open btn-disabled" disabled>PRÓXIMAMENTE</button>
+            </div>
+
+            <div class="card disabled" data-title="Plantilla-Calibracion TLD Temperatura">
+                <div class="card-icon">🌡️</div>
+                <div class="card-title">Plantilla-Calibración TLD</div>
+                <div class="card-desc">Generación de Certificados para Termómetros.</div>
+                <button class="btn-open btn-disabled" disabled>PRÓXIMAMENTE</button>
+            </div>
+
+            <div class="card disabled" data-title="Plantilla-Calibracion HUM Humedad">
+                <div class="card-icon">💧</div>
+                <div class="card-title">Plantilla-Calibración HUM</div>
+                <div class="card-desc">Generación de Certificados para Higrómetros.</div>
+                <button class="btn-open btn-disabled" disabled>PRÓXIMAMENTE</button>
+            </div>
+
+            <div class="card disabled" data-title="Plantilla MEC Material Equipo">
+                <div class="card-icon">🛠️</div>
+                <div class="card-title">Plantilla MEC</div>
+                <div class="card-desc">Gestión de Material, Equipo y Componentes de prueba.</div>
+                <button class="btn-open btn-disabled" disabled>PRÓXIMAMENTE</button>
             </div>
 
         </div>
@@ -296,13 +355,28 @@
     </footer>
 
     <script>
+        // Lógica para cargar el Logo
+        function uploadImage(input, imgId, txtId) {
+            if (input.files && input.files[0]) {
+                let reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById(imgId).src = e.target.result;
+                    document.getElementById(imgId).style.display = 'block';
+                    if(document.getElementById(txtId)) document.getElementById(txtId).style.display = 'none';
+                    // Quitar el borde punteado una vez cargado el logo
+                    input.parentElement.style.border = 'none';
+                    input.parentElement.style.backgroundColor = 'transparent';
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
         // Lógica para el buscador dinámico
         function filterCards() {
             const input = document.getElementById('search-input').value.toLowerCase();
             const cards = document.querySelectorAll('.card');
 
             cards.forEach(card => {
-                // Se busca dentro del atributo data-title que contiene palabras clave invisibles
                 const title = card.getAttribute('data-title').toLowerCase();
                 
                 if (title.includes(input)) {
