@@ -42,9 +42,15 @@
             page-break-inside: avoid; break-inside: avoid; 
         }
         
-        /* Tablas */
-        table.data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        table.data-table th, table.data-table td { border: 1px solid var(--black); padding: 8px; text-align: left; vertical-align: middle;}
+        /* Tablas Optimizadas (Fuente Reducida y Compacta) */
+        table.data-table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 10px;}
+        table.data-table th, table.data-table td { 
+            border: 1px solid var(--black); 
+            padding: 4px; /* Padding reducido para ahorrar espacio vertical */
+            text-align: left; 
+            vertical-align: middle;
+            font-size: 7.5pt !important; /* Fuente reducida globalmente en tablas */
+        }
         table.data-table th { background: #e0e0e0; font-weight: bold; text-align: center; }
 
         /* REGLA MAESTRA DE TABLAS: Permite flujo, pero protege las filas */
@@ -406,7 +412,7 @@
 
 <script>
     /* ========================================================
-       SISTEMA MAESTRO DE PAGINACIÓN SIN ESPACIOS EN BLANCO
+       SISTEMA MAESTRO DE PAGINACIÓN SIN ESPACIOS EN BLANCO Y CON TÍTULOS PROTEGIDOS
        ======================================================== */
     function prepararPDF() {
         const btn = document.getElementById('btn-export');
@@ -443,7 +449,8 @@
                 let pageNum = 1;
                 let currentY = 0;
 
-                document.querySelectorAll('.injected-page').forEach(e => e.remove());
+                // Limpiamos inyecciones pasadas, incluyendo los espaciadores nuevos
+                document.querySelectorAll('.injected-page, .injected-spacer').forEach(e => e.remove());
 
                 let rawElements = Array.from(document.querySelector('.content-wrapper tbody td').children);
                 let elementsToProcess = [];
@@ -458,19 +465,12 @@
                 elementsToProcess.forEach(el => {
                     if (el.classList.contains('no-print') || window.getComputedStyle(el).display === 'none') return;
                     
-                    el.style.pageBreakBefore = ''; 
-                    el.style.breakBefore = '';
-
                     const elStyle = window.getComputedStyle(el);
                     let elHeight = el.offsetHeight + parseFloat(elStyle.marginTop || 0) + parseFloat(elStyle.marginBottom || 0);
 
                     const isCover = el.classList.contains('cover-page');
                     if (isCover && currentY > 0) { pageNum++; currentY = 0; }
                     
-                    if ((elStyle.pageBreakBefore === 'always' || elStyle.breakBefore === 'always' || elStyle.breakBefore === 'page') && currentY > 0) { 
-                        pageNum++; currentY = 0; 
-                    }
-
                     // Identifica elementos que NO deben romperse (Títulos, Gráficas, Cajas) PERO EXCLUYE LAS TABLAS
                     const avoidBreak = elStyle.pageBreakInside === 'avoid' || elStyle.breakInside === 'avoid' || 
                                        ['H1','H2','H3','H4'].includes(el.tagName) || 
@@ -478,17 +478,23 @@
                                        el.classList.contains('plot-container');
 
                     if (avoidBreak && elHeight <= PAGE_CONTENT) {
-                        if (currentY + elHeight > PAGE_CONTENT) {
-                            // Salto de página forzado mediante CSS (Evita cortar títulos y gráficas)
-                            el.style.pageBreakBefore = 'always';
-                            el.style.breakBefore = 'page';
+                        if (currentY + elHeight > PAGE_CONTENT && currentY > 0) {
+                            // MAGIA ANTI-BUG DE CHROME: En lugar de forzar el salto en el título (lo cual lo vuelve invisible),
+                            // insertamos un bloque invisible "antes" del título que empuja la hoja limpiamente.
+                            const spacer = document.createElement('div');
+                            spacer.className = 'injected-spacer no-screen';
+                            spacer.style.pageBreakBefore = 'always';
+                            spacer.style.breakBefore = 'page';
+                            spacer.style.height = '1px'; // Mínimo espacio
+                            el.parentNode.insertBefore(spacer, el);
+                            
                             pageNum++;
                             currentY = elHeight;
                         } else {
                             currentY += elHeight;
                         }
                     } else {
-                        // FLUJO LIBRE PARA TABLAS Y TEXTOS LARGOS: No genera espacios en blanco.
+                        // FLUJO LIBRE PARA TABLAS Y TEXTOS LARGOS: No genera espacios en blanco gigantes.
                         if (currentY + elHeight > PAGE_CONTENT) {
                             let overflow = elHeight - (PAGE_CONTENT - currentY);
                             pageNum += Math.ceil(overflow / PAGE_CONTENT);
@@ -498,6 +504,7 @@
                         }
                     }
 
+                    // Sincronización milimétrica del Índice
                     for(let i=1; i<=13; i++) {
                         if (el.id === 'sec-' + i || el.querySelector(`#sec-${i}`)) {
                             const toc = document.getElementById('toc-' + i);
@@ -505,7 +512,8 @@
                         }
                     }
 
-                    if (isCover || elStyle.pageBreakAfter === 'always' || elStyle.breakAfter === 'always' || elStyle.breakAfter === 'page') {
+                    // Portadas o forzados manuales
+                    if (isCover) {
                         pageNum++;
                         currentY = 0;
                     }
@@ -540,7 +548,8 @@
                     doc.style.minHeight = '';
                     
                     document.getElementById('print-sim-style').remove();
-                    document.querySelectorAll('.injected-page').forEach(e => e.remove());
+                    // Limpieza total post-impresión para volver a la vista web normal
+                    document.querySelectorAll('.injected-page, .injected-spacer').forEach(e => e.remove());
                 }, 300);
 
             }, 300); 
@@ -613,7 +622,7 @@
         wrapper.innerHTML = `
             <button class="danger no-print" onclick="this.parentElement.remove()" style="position: absolute; right: 5px; top: 5px; z-index: 100; font-size: 8pt; padding: 5px 10px; cursor: pointer; border-radius: 4px;">✕ ELIMINAR SECCIÓN</button>
             <div id="${plotId}" class="plot-container" style="border: 1px solid var(--black); margin-bottom: 10px; margin-top: 15px;"></div>
-            <table class="data-table" id="${tableId}" style="font-size: 7.5pt; text-align: center;">
+            <table class="data-table" id="${tableId}" style="font-size: 7pt; text-align: center;">
                 <thead>
                     <tr>
                         <th style="text-align: center; width:12%">ID Sensor</th>
